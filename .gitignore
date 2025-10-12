@@ -1,0 +1,3 @@
+.venv/
+.env
+uv.lock  # Optional, but useful for CI/CD environments to pin versions
