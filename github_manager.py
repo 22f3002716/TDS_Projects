@@ -84,24 +84,33 @@ class GitHubManager:
                 raise e
         
         # 4. Enable GitHub Pages
-        # Note: PyGithub often requires a slight delay or a direct API call for Pages.
-        # We'll use the simplest supported method: setting the source to the 'main' branch root.
-        try:
-             repo.get_pages()
-             print("GitHub Pages already enabled.")
-        except GithubException:
-             # Enable Pages on 'main' branch, root folder
-             repo.enable_pages(
-                 source={"branch": "main", "path": "/"},
-                 # For new repos, we need to use a direct API call or wait until default branch is 'main' and then call set_pages_source.
-                 # The simplest method is to rely on GitHub's default for new repos being main/root when Pages is enabled.
-                 # We rely on PyGithub's ability to set the branch source.
-                 repo.set_pages_source(branch='main') # This often fails if run too quickly.
-                 print("Attempted to enable GitHub Pages on 'main' branch.")
-
-        # The Pages URL structure is predictable:
+        # Note: PyGithub Pages API has quirks. We'll use a direct source setting.
         pages_url = f"https://{self.username}.github.io/{repo_name}/"
         
+        try:
+            # Check if Pages is already enabled (for existing repos)
+            repo.get_pages()
+            print("GitHub Pages already enabled.")
+        except GithubException as e:
+            if e.status == 404:
+                # Pages is NOT enabled, proceed to enable it.
+                # Use the repository's main branch (usually 'main' or 'master')
+                try:
+                    # PyGithub method to set the source branch/path for Pages
+                    repo.set_pages_source(
+                        branch='main',
+                        path='/'
+                    )
+                    print("Enabled GitHub Pages on 'main' branch, root path.")
+                except Exception as inner_e:
+                    # Catch potential errors if PyGithub's set_pages_source fails due to timing/state
+                    print(f"Warning: Failed to enable Pages via set_pages_source. You may need to enable it manually. Error: {inner_e}")
+            else:
+                # Re-raise any other GitHub API error
+                raise e
+
+        # 5. Return Details
+        # The Pages URL structure is predictable:
         return repo.html_url, commit_sha, pages_url
 
     def _generate_mit_license(self) -> str:
