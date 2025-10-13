@@ -1,12 +1,16 @@
-# pyproject.toml (dependencies section)
 [project]
-name = "llm-project"
+name = "tds-projects"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.119.0",
     "google-genai>=1.43.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.0",
     "pygithub>=2.8.1",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
     "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
     "uvicorn>=0.37.0",
 ]

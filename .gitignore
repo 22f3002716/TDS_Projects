@@ -1,8 +1,20 @@
-.venv/
+# Environment and secrets
 .env
-uv.lock  # Optional, but useful for CI/CD environments to pin versions
-node_modules/
-dist/
+
+# Virtual Environment
+.venv/
+/venv/
+
+# Byte-compiled Python files
 __pycache__/
 *.pyc
+.ipynb_checkpoints
+
+# Operating System Files
 .DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
