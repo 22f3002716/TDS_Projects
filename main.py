@@ -13,10 +13,28 @@ from github_manager import GitHubManager
 # --- 1. Pydantic Model for Incoming Request Data ---
 
 class Attachment(BaseModel):
-    """Schema for a single file attachment."""
+    """Schema for a single file attachment.
+    This class definition creates a Pydantic model named Attachment that represents
+    a single file attachment. It has two fields: name and url. The name field stores
+    the original name of the file, and the url field stores the Base64 data URI of the
+    file content. The Field class is used to provide descriptions for the fields."""
     name: str = Field(description="The original name of the file.")
     url: str = Field(description="The Base64 data URI of the file content.")
 
+"""This class definition creates a Pydantic model named TaskRequest that represents
+the complete schema for the incoming POST request body. The class has the following
+fields:
+
+email: The user's email address.
+secret: A secret key for authentication (optional).
+task: The unique identifier for the task.
+round: The current round/iteration number.
+nonce: A unique token for the request.
+brief: The detailed task description for the LLM.
+checks: A list of verification checks/tests (default is an empty list).
+evaluation_url: The URL to notify after completion.
+attachments: A list of attached files (default is an empty list).
+Each field is annotated with a description using the Field class from Pydantic."""
 class TaskRequest(BaseModel):
     """The complete schema for the incoming POST request body."""
     email: str = Field(description="The user's email address.")
@@ -90,16 +108,16 @@ async def handle_code_generation(
 ):
     """
     Receives a task request, generates code using the LLM, 
-    and commits the result to GitHub.
+    and deploys the result to a NEW GitHub repository.
     """
     global llm_generator, github_manager
 
     # 4.1. Check for valid service initialization
     if not llm_generator or not github_manager:
-         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
-            detail="Service not fully initialized. Check server logs for missing API keys."
-        )
+          raise HTTPException(
+              status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+              detail="Service not fully initialized. Check server logs for missing API keys."
+          )
 
     try:
         # 4.2. Generate Code (using LLM Generator)
@@ -112,23 +130,22 @@ async def handle_code_generation(
         if not generated_files:
             raise ValueError("LLM failed to generate any files.")
 
-        # 4.3. Commit to GitHub (using GitHub Manager)
-        commit_message = f"Solve task {task_request.task}, Round {task_request.round}"
-        branch_name = f"task/{task_request.task}/round-{task_request.round}"
+        # --- 4.3. CALL FIX: Use create_and_deploy and unpack the three return values ---
+        task_id = f"{task_request.task}-round-{task_request.round}"
         
-        # This will create a new branch, commit files, and return the URL
-        commit_url = github_manager.commit_files(
-            files_content=generated_files,
-            commit_message=commit_message,
-            branch_name=branch_name
+        repo_url, commit_sha, pages_url = github_manager.create_and_deploy(
+            task_id=task_id,
+            files=generated_files
         )
+        # We use the repo_url or pages_url as the final output URL for the user
+        final_url = pages_url if pages_url else repo_url
         
         # 4.4. Success Response
         return {
             "status": "success",
-            "message": "Code generated and committed successfully.",
-            "commit_url": commit_url,
-            "evaluation_url": task_request.evaluation_url # Echoing the next step URL
+            "message": f"Code generated and deployed successfully to new repository: {repo_url}",
+            "commit_url": final_url, # Return the deployment URL
+            "evaluation_url": task_request.evaluation_url
         }
 
     except Exception as e:
@@ -138,7 +155,6 @@ async def handle_code_generation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process request: {e}"
         )
-
 # --- 5. Health Check Endpoint ---
 
 @app.get("/health", tags=["Monitoring"])

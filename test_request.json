@@ -1,0 +1,18 @@
+{
+    "email": "test@example.com",
+    "secret": "dummy-secret-key",
+    "task": "sum-sales-data",
+    "round": 1,
+    "nonce": "test-nonce-ab12",
+    "brief": "Create an HTML page that reads the attached CSV, sums the 'Sales' column, and displays the total in a <div id='total'> element. The logic must be fully contained in a single <script> block in the index.html.",
+    "checks": [
+        "js: document.querySelector(\"#total\").textContent == 1500"
+    ],
+    "evaluation_url": "http://mock-evaluation-server.com/notify",
+    "attachments": [
+        {
+            "name": "data.csv", 
+            "url": "data:text/csv;base64,UHJvZHVjdCxTYWxlcw5MYXB0b3AsMTAwMA5Nb25pdG9yLDUwMA==" 
+        }
+    ]
+}
