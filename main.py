@@ -1,10 +1,14 @@
 # main.py
 import os
+import httpx # Required for the asynchronous HTTP client
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from pydantic import BaseModel, Field
+
+# Load environment variables for the secret check
+load_dotenv()
 
 # Local module imports
 from llm_generator import LLMCodeGenerator
@@ -88,15 +92,24 @@ app = FastAPI(
 
 # NOTE: This is a placeholder for basic secret authentication.
 # In a production environment, this should be replaced by a more robust mechanism (e.g., JWT).
-def get_auth_check(request: Request):
-    """Performs a simple secret check."""
-    # This token should ideally be loaded from an environment variable (e.g., WEBHOOK_SECRET)
-    # For now, we'll just check if the secret field is present in the request body (FastAPI handles parsing).
-    # Since we use the secret field from TaskRequest, we'll check it within the main handler.
-    # For a simple check, we can check a known header:
-    # if request.headers.get("X-API-KEY") != os.getenv("API_KEY"):
-    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
-    pass
+def get_auth_check(task_request: TaskRequest):
+    """Performs a simple secret check against the WEBHOOK_SECRET environment variable."""
+    expected_secret = os.getenv("WEBHOOK_SECRET")
+
+    # Check if the secret is configured on the server
+    if not expected_secret:
+        # For testing/dev, we allow access if no secret is set. 
+        # In production, this should be a hard failure.
+        print("Warning: WEBHOOK_SECRET is not configured on the server.")
+        return
+
+    # Check the secret provided in the request body
+    if task_request.secret != expected_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid request secret provided."
+        )
+    # If the secrets match, authentication is successful.
 
 
 # --- 4. Main API Endpoint ---
@@ -104,7 +117,8 @@ def get_auth_check(request: Request):
 @app.post("/generate-code", tags=["Code Generation"])
 async def handle_code_generation(
     task_request: TaskRequest,
-    auth_check: Any = Depends(get_auth_check)
+    # NOTE: Pass TaskRequest to dependency for validation
+    auth_check: Any = Depends(get_auth_check) 
 ):
     """
     Receives a task request, generates code using the LLM, 
@@ -131,7 +145,8 @@ async def handle_code_generation(
             raise ValueError("LLM failed to generate any files.")
 
         # --- 4.3. CALL FIX: Use create_and_deploy and unpack the three return values ---
-        task_id = f"{task_request.task}-round-{task_request.round}"
+        task_slug = task_request.task.lower().replace(" ", "-")
+        task_id = f"{task_slug}-round-{task_request.round}"
         
         repo_url, commit_sha, pages_url = github_manager.create_and_deploy(
             task_id=task_id,
@@ -140,7 +155,34 @@ async def handle_code_generation(
         # We use the repo_url or pages_url as the final output URL for the user
         final_url = pages_url if pages_url else repo_url
         
-        # 4.4. Success Response
+        # 4.4. Post to Evaluation URL (Callback)
+        try:
+            callback_json = {
+                "email": task_request.email,
+                "task": task_request.task,
+                "round": task_request.round,
+                "nonce": task_request.nonce,
+                "repo_url": repo_url,
+                "commit_sha": commit_sha,
+                "pages_url": pages_url,
+            }
+            
+            async with httpx.AsyncClient(timeout=600.0) as client: # Timeout is 10 min (600s)
+                response = await client.post(
+                    task_request.evaluation_url,
+                    json=callback_json,
+                    headers={"Content-Type": "application/json"}
+                )
+                response.raise_for_status() # Raise error for 4xx/5xx responses
+            
+            print(f"Successfully posted results to evaluation URL: {task_request.evaluation_url}")
+            
+        except httpx.RequestError as e:
+            print(f"WARNING: Failed to post to evaluation URL. Request error: {e}")
+        except httpx.HTTPStatusError as e:
+            print(f"WARNING: Failed to post to evaluation URL. Server returned status: {e.response.status_code}")
+        
+        # 4.5. Success Response
         return {
             "status": "success",
             "message": f"Code generated and deployed successfully to new repository: {repo_url}",
@@ -150,7 +192,7 @@ async def handle_code_generation(
 
     except Exception as e:
         print(f"Error during processing: {e}")
-        # 4.5. Error Response
+        # 4.6. Error Response
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process request: {e}"

@@ -106,7 +106,14 @@ class LLMCodeGenerator:
             "web applications for simple tasks. Your output MUST be a single, valid JSON object "
             "that strictly adheres to the provided schema. The JSON object MUST contain a "
             "'files' dictionary where keys are the complete filenames (e.g., 'index.html', 'script.js') "
-            "and values are the full content of those files as a string."
+            "and values are the full content of those files as a string. "
+            
+            # --- ADDED REQUIREMENTS FOR EVALUATION COMPLIANCE ---
+            "In addition to the main application files, you MUST ALWAYS include the following two files: "
+            "1. **README.md**: A detailed README file specific to the application, describing its features and how to run it. "
+            "2. **LICENSE**: The full and complete text of the MIT License. "
+            
+            # --- RETAINED STRICTNESS ---
             "\nDO NOT include any explanation, markdown formatting outside of the JSON block, or preamble."
         )
 

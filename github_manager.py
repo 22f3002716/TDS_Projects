@@ -1,5 +1,6 @@
 # github_manager.py
 import os
+import requests
 from dotenv import load_dotenv
 from github import Github, GithubException, InputGitAuthor#, PagesSourceHash # Add PagesSourceHash
 from github.GithubObject import NotSet # Import NotSet for configuration
@@ -129,25 +130,37 @@ class GitHubManager:
             
             commit_sha = file_obj['commit'].sha # Get the SHA of the final commit
             
-        # 3. Enable GitHub Pages - Use Robust Fallback
-        
-        # NOTE: We skip explicit API calls for Pages configuration (get_pages, enable_pages)
-        # because the current PyGithub version is incompatible. 
-        # We rely on two facts:
-        # a) GitHub automatically enables Pages on the 'main' branch if files exist.
-        # b) The URL convention is predictable.
-        
-        # 1. Ensure the default branch is 'main' to trigger Pages activation
-        try:
-            repo.edit(default_branch="main")
-            print("Set default branch to 'main' to activate Pages.")
-        except Exception as e:
-            # This is a non-critical step, logging a warning is sufficient
-            print(f"Warning: Could not set default branch to 'main'. Pages might not activate immediately. Error: {e}")
+        import requests
 
-        # 2. Construct the Pages URL using convention (username.github.io/repo-name/)
-        pages_url = f"https://{self.username}.github.io/{repo_name}/"
-        print(f"Relying on default Pages URL convention: {pages_url}")
+        # 3. Enable GitHub Pages via REST API
+        try:
+            api_url = f"https://api.github.com/repos/{self.username}/{repo_name}/pages"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {self.token}"
+            }
+            payload = {
+                "source": {
+                    "branch": "main",
+                    "path": "/"
+                }
+            }
+            response = requests.post(api_url, headers=headers, json=payload)
+            
+            if response.status_code in [201, 204]:
+                print("✅ GitHub Pages successfully enabled on main branch.")
+            elif response.status_code == 409:
+                # Pages already enabled
+                print("ℹ️ GitHub Pages already enabled.")
+            else:
+                print(f"⚠️ GitHub Pages setup failed: {response.status_code} - {response.text}")
+
+            # Construct Pages URL
+            pages_url = f"https://{self.username}.github.io/{repo_name}/"
+            print(f"Click to view the deployed app: {pages_url}")
+        except Exception as e:
+            print(f"Warning: Failed to enable GitHub Pages automatically. Error: {e}")
+            pages_url = f"https://{self.username}.github.io/{repo_name}/"
 
         # 4. Return Details
         return repo.html_url, commit_sha, pages_url
@@ -156,7 +169,7 @@ class GitHubManager:
 if __name__ == "__main__":
     try:
         # **IMPORTANT:** Change this unique task ID every time you run the test!
-        TEST_TASK_ID = "test-run-10"  # CHANGE THIS!
+        TEST_TASK_ID = "test-run-11"  # CHANGE THIS!
         
         # Minimum files required for the test
         test_files = {
