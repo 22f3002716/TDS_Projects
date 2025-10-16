@@ -2,6 +2,8 @@
 import os
 import json
 import base64
+import re # Add this import
+import json
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError
@@ -156,7 +158,7 @@ class LLMCodeGenerator:
             response_text = response.text 
             response_json = json.loads(response_text)
             validated_output = GeneratedFiles.model_validate(response_json)
-            
+            #print(response_json, response_text) # Debugging line to see raw response
             return validated_output.files
 
         except APIError as e:

@@ -1,3 +1,5 @@
+# To check the evaluation url server is working fine. Created a simple echo server.
+
 from fastapi import FastAPI, Request
 
 app = FastAPI()
